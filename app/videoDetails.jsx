@@ -1,40 +1,48 @@
-import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { VideoDetailsCard } from './components/VideoDetailsCard';
 
 export default function VideoDetails() {
-  const { descriptionTitle, description, link, linkText } =
-    useLocalSearchParams()
+  const { campaignsDetails } = useLocalSearchParams();
+  const campaigns = JSON.parse(campaignsDetails || '[]');
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{descriptionTitle}</Text>
-      <Text style={styles.description}>{description}</Text>
-      <TouchableOpacity onPress={() => Linking.openURL(link)}>
-        <Text style={styles.linkText}>{linkText}</Text>
-      </TouchableOpacity>
-    </View>
-  )
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.scrollView}>
+        <Text style={styles.title}>Campañas Activas</Text>
+        {campaigns.map((campaign, index) => (
+          <VideoDetailsCard
+            key={index}
+            title={campaign.descriptionTitle}
+            description={campaign.description}
+            link={campaign.link}
+            linkText={campaign.linkText}
+          />
+        ))}
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    display: 'flex',
-    justifyContent: 'center',
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  scrollView: {
+    flexGrow: 1,
     alignItems: 'center',
-    flexDirection: 'column',
-    gap: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
   },
   title: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 8,
+    color: '#333333',
+    marginBottom: 20,
+    textAlign: 'center',
   },
-  description: {
-    fontSize: 20,
-    marginBottom: 8,
-  },
-  linkText: {
-    fontSize: 16,
-    color: 'blue',
-    textDecorationLine: 'underline',
-  },
-})
+});
+
