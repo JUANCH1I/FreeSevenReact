@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar, Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { VideoDetailsCard } from './components/VideoDetailsCard';
 
@@ -13,8 +13,10 @@ export default function VideoDetails() {
       <ScrollView contentContainerStyle={styles.scrollView}>
         <Text style={styles.title}>Campañas Activas</Text>
         {campaigns.map((campaign, index) => (
+          console.log(campaign, index),
           <VideoDetailsCard
             key={index}
+            campaignId={campaign.id}
             title={campaign.descriptionTitle}
             description={campaign.description}
             link={campaign.link}

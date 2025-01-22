@@ -1,137 +1,280 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, AppState, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
-import * as Application from 'expo-application';
-import { doc, getDoc, collection, query, getDocs, where, runTransaction } from 'firebase/firestore';
-import { db } from './services/firebaseConfig';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { Link, useRouter } from 'expo-router';
-import { useEvent, useEventListener } from 'expo';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef, useState } from 'react'
+import {
+  View,
+  Text,
+  StyleSheet,
+  AppState,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Linking,
+} from 'react-native'
+import * as Application from 'expo-application'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  getDocs,
+  where,
+  runTransaction,
+  and,
+} from 'firebase/firestore'
+import {
+  db,
+  incrementGlobalMetrics,
+  incrementUserMetrics,
+  updateWatchTime,
+} from './services/firebaseConfig'
+import { useVideoPlayer, VideoView } from 'expo-video'
+import { Link, useRouter } from 'expo-router'
+import { useEvent, useEventListener } from 'expo'
+import { Ionicons } from '@expo/vector-icons'
+import { incrementViews } from './services/firebaseConfig'
+import { formatTime } from './utils/utils'
 
 export default function Index() {
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [videoUrl, setVideoUrl] = useState('');
-  const [timeCounter, setTimeCounter] = useState(0);
-  const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [campaignsDetails, setCampaignsDetails] = useState<any[]>([]);
-  const appState = useRef(AppState.currentState);
-  const [currentCampaignIndex, setCurrentCampaignIndex] = useState(0);
-  const androidId = "a1bc3c155d41ebd4";
-  const router = useRouter();
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isRegistered, setIsRegistered] = useState(false)
+  const [videoUrl, setVideoUrl] = useState('')
+  const [timeCounter, setTimeCounter] = useState(0)
+  const [totalTimeWatched, setTotalTimeWatched] = useState(0)
+  const [campaigns, setCampaigns] = useState<any[]>([])
+  const [syncedTimeCounter, setSyncedTimeCounter] = useState(0)
+  const [videoWatchTimes, setVideoWatchTimes] = useState<{
+    [key: string]: number
+  }>({})
+  const [isPiP, setIsPiP] = useState(false)
+  const appState = useRef(AppState.currentState)
+  const [currentCampaignIndex, setCurrentCampaignIndex] = useState(0)
+  const androidId = Application.getAndroidId()
+  const router = useRouter()
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  
 
   useEffect(() => {
     const checkRegistration = async () => {
-      if (!androidId) {
-        setIsRegistered(false);
-      } else {
-        setIsRegistered(true);
-        console.log(androidId);
-        loadCampaigns(androidId);
-      }
-    };
+      const isRegistered = await AsyncStorage.getItem('isRegistered')
 
-    checkRegistration();
-  }, []);
+      if (isRegistered === 'true') {
+        setIsRegistered(true)
+        loadCampaigns(androidId)
+      } else {
+        setIsRegistered(false)
+        router.push('./Register')
+      }
+    }
+
+    checkRegistration()
+  }, [])
 
   const loadCampaigns = async (userId: string) => {
     try {
-      const userDocRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userDocRef);
-  
+      const userDocRef = doc(db, 'users', userId)
+      const userDoc = await getDoc(userDocRef)
+
       if (userDoc.exists()) {
-        const campaignsQuery = query(collection(db, 'campaigns'), where('isActive', '==', true));
-        const campaignsSnapshot = await getDocs(campaignsQuery);
-  
-        const campaignsList = campaignsSnapshot.docs.map(doc => {
-          const { descriptionTitle, description, link, linkText, mediaUrl } = doc.data();
+        const campaignsQuery = query(
+          collection(db, 'campaigns'),
+          where('isActive', '==', true)
+        )
+        const campaignsSnapshot = await getDocs(campaignsQuery)
+
+        const campaignsList = campaignsSnapshot.docs.map((doc) => {
+          const { descriptionTitle, description, link, linkText, mediaUrl } =
+            doc.data()
           return {
+            id: doc.id,
             descriptionTitle: descriptionTitle || '',
             description: description || '',
             link: link || '',
             linkText: linkText || '',
             mediaUrl: mediaUrl || '',
-          };
-        });
-  
-        setCampaignsDetails(campaignsList);
-        setCampaigns(campaignsList);
-  
+          }
+        })
+
+        setCampaigns(campaignsList)
+
+        // Inicializar videoWatchTimes
+        const initialWatchTimes: { [key: string]: number } = {}
+        campaignsList.forEach((campaign) => {
+          initialWatchTimes[campaign.id] = 0
+        })
+        setVideoWatchTimes(initialWatchTimes)
+
         if (campaignsList.length > 0) {
-          setVideoUrl(campaignsList[0].mediaUrl);
+          setVideoUrl(campaignsList[0].mediaUrl)
         }
       }
     } catch (error) {
-      console.error('Error al cargar campañas:', error);
+      console.error('Error al cargar campañas:', error)
     }
-  };
+  }
 
-  const handleVideoEnd = () => {
-    const nextIndex = (currentCampaignIndex + 1) % campaigns.length;
-    setCurrentCampaignIndex(nextIndex);
-    setVideoUrl(campaigns[nextIndex]?.mediaUrl || '');
-  };
+  const handleVideoEnd = async () => {
+    await syncTimeToFirebase()
+    console.log(campaigns.length)
+    if ((campaigns.length = 1)) {
+      // Si solo hay una campaña, reinicia el video
+      console.log('Reproducción en bucle activada.')
+      setVideoUrl(campaigns[0]?.mediaUrl || '') // Reinicia el mismo video
+      player.play() // Asegúrate de iniciar la reproducción
+    } else {
+      const nextIndex = (currentCampaignIndex + 1) % campaigns.length
+      setCurrentCampaignIndex(nextIndex)
+      setVideoUrl(campaigns[nextIndex]?.mediaUrl || '')
+    }
+  }
+
+  const handlePiPStart = () => {
+    console.log('PiP iniciado')
+    setIsPiP(true)
+  }
+
+  const handlePiPEnd = () => {
+    console.log('PiP finalizado')
+    setIsPiP(false)
+  }
 
   const startTimer = () => {
-    if (!intervalRef.current) {
+    if (!intervalRef.current && isActuallyPlaying) {
       intervalRef.current = setInterval(() => {
-        setTimeCounter((prev) => prev + 1);
-      }, 1000);
+        setTimeCounter((prev) => prev + 1) // Contador visible
+        setTotalTimeWatched((prev) => prev + 1) // Tiempo total acumulado
+        setVideoWatchTimes((prev) => ({
+          ...prev,
+          [campaigns[currentCampaignIndex]?.id || '']:
+            (prev[campaigns[currentCampaignIndex]?.id || ''] || 0) + 1,
+        }))
+      }, 1000)
+    } else if (!isActuallyPlaying && intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
     }
-  };
-
-  const syncTimeToFirebase = async () => {
-    if (!androidId || timeCounter === 0) return;
-
-    try {
-      const userRef = doc(db, 'users', androidId);
-      await runTransaction(db, async (transaction) => {
-        const doc = await transaction.get(userRef);
-        const currentTotal = doc.data()?.totalTimeWatched || 0;
-        transaction.update(userRef, {
-          totalTimeWatched: currentTotal + timeCounter,
-        });
-      });
-
-      setTimeCounter(0);
-    } catch (error) {
-      console.error('Error syncing time to Firebase:', error);
-    }
-  };
+  }
 
   useEffect(() => {
-    const appStateListener = AppState.addEventListener('change', (nextAppState) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        syncTimeToFirebase();
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
       }
-      appState.current = nextAppState;
-    });
-
-    return () => appStateListener.remove();
-  }, [timeCounter]);
-
-  const player = useVideoPlayer(videoUrl, player => {
-    player.loop = false;
-    player.play();
-    startTimer();
-  });
-
-  useEventListener(player, 'statusChange', ({ status, error }) => {
-    if (status === 'idle'){
-      handleVideoEnd();
     }
-  }); 
+  }, [])
 
-  const handleVideoPress = () => {
+  const syncTimeToFirebase = async () => {
+    if (!androidId || timeCounter === 0) return
+
+    const currentCampaignId = campaigns[currentCampaignIndex]?.id || ''
+    if (!currentCampaignId) {
+      console.error('No hay campaña actual para sincronizar.')
+      return
+    }
+
+    try {
+      // Llama a la función `updateWatchTime` para sincronizar las métricas
+      await updateWatchTime(currentCampaignId, androidId, timeCounter)
+
+      console.log(`Tiempo sincronizado: ${timeCounter}s`)
+
+      // Mueve el contador sincronizado pero mantiene el visible
+      setSyncedTimeCounter((prev) => prev + timeCounter)
+    } catch (error) {
+      console.error('Error sincronizando el tiempo visto:', error)
+    }
+  }
+
+  useEffect(() => {
+    const appStateListener = AppState.addEventListener(
+      'change',
+      (nextAppState) => {
+        if (
+          appState.current.match(/inactive|background/) &&
+          nextAppState === 'active'
+        ) {
+          syncTimeToFirebase()
+        }
+        appState.current = nextAppState
+      }
+    )
+
+    return () => appStateListener.remove()
+  }, [timeCounter])
+
+  const player = useVideoPlayer(videoUrl, (player) => {
+    player.audioMixingMode = 'mixWithOthers'
+    player.loop = false
+    player.play()
+  })
+
+  const { isPlaying } = useEvent(player, 'playingChange', {
+    isPlaying: player.playing,
+  })
+  const isActuallyPlaying = player.status === 'readyToPlay' && player.playing
+
+  useEffect(() => {
+    console.log('isActuallyPlaying', isActuallyPlaying)
+    if (isPlaying) {
+      console.log('Se está reproduciendo')
+      startTimer()
+    } else {
+      console.log('No se está reproduciendo, intentando reproducir...')
+      player.play()
+    }
+  }, [isPlaying])
+
+  const hasCountedView = useRef(false)
+
+  useEffect(() => {
+    const subscription = player.addListener('timeUpdate', () => {
+      const currentTime = player.currentTime
+      const duration = player.duration
+
+      // Verifica si el usuario ha visto al menos el 50% del video
+      if (!hasCountedView.current && currentTime / duration >= 0.5) {
+        incrementViews(campaigns[currentCampaignIndex].id)
+
+        hasCountedView.current = true
+      }
+    })
+
+    return () => {
+      subscription.remove()
+    }
+  }, [player])
+
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status === 'idle') {
+      console.log('Video terminó, cargando siguiente...')
+      handleVideoEnd()
+    } else if (status === 'readyToPlay' && !player.playing) {
+      console.log('Forzando reproducción...')
+      player.play()
+    }
+  })
+
+  /*const handleVideoPress = () => {
     router.push({
       pathname: './videoDetails',
       params: { campaignsDetails: JSON.stringify(campaignsDetails) },
     });
-  };
+  };*/
+
+  const handleVideoPress = () => {
+    incrementGlobalMetrics(campaigns[currentCampaignIndex].id, 'click')
+    const currentVideo = campaigns[currentCampaignIndex]
+    if (currentVideo && currentVideo.link) {
+      Linking.openURL(currentVideo.link).catch((err) =>
+        console.error('Error al abrir la URL:', err)
+      )
+    } else {
+      console.warn('No hay URL disponible para este video.')
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle='dark-content' hidden={true} />
       <View style={styles.container}>
         {isRegistered ? (
           <>
@@ -144,18 +287,37 @@ export default function Index() {
                 allowsFullscreen
                 allowsPictureInPicture
                 startsPictureInPictureAutomatically
+                onPictureInPictureStart={handlePiPStart}
+                onPictureInPictureStop={handlePiPEnd}
               />
-              <TouchableOpacity onPress={handleVideoPress} style={styles.touchable} />
+              <TouchableOpacity
+                onPress={handleVideoPress}
+                style={styles.touchable}
+              />
             </View>
             <View style={styles.infoContainer}>
               <Text style={styles.timeCounter}>
-                <Ionicons name="time-outline" size={24} color="#4A90E2" /> {timeCounter}s
+                <Ionicons name='time-outline' size={24} color='#4A90E2' />{' '}
+                {timeCounter}s
               </Text>
-              <TouchableOpacity style={styles.goalsButton} onPress={() => router.push('./goals')}>
+              <TouchableOpacity
+                style={styles.goalsButton}
+                onPress={() =>
+                  router.push({
+                    pathname: './goals',
+                    params: { totalTimeWatched: totalTimeWatched },
+                  })
+                }
+              >
                 <Text style={styles.goalsButtonText}>Ver objetivos</Text>
-                <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+                <Ionicons name='arrow-forward' size={24} color='#FFFFFF' />
               </TouchableOpacity>
             </View>
+            <Text style={styles.totalTimeWatched}>
+              <Text style={styles.totalTimeWatchedText}>Tiempo total</Text>
+              <Ionicons name='time-outline' size={24} color='#4A90E2' />{' '}
+              {formatTime(totalTimeWatched)}s
+            </Text>
           </>
         ) : (
           <View style={styles.loadingContainer}>
@@ -164,7 +326,7 @@ export default function Index() {
         )}
       </View>
     </SafeAreaView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
@@ -177,6 +339,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1E1E1E',
+  },
+  totalTimeWatched: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    position: 'absolute',
+    bottom: 30,
+  },
+  totalTimeWatchedText: {
+    color: '#4A90E2',
   },
   videoContainer: {
     width: '100%',
@@ -234,5 +406,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
   },
-});
-
+})
