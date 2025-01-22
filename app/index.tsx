@@ -50,7 +50,11 @@ export default function Index() {
   const androidId = Application.getAndroidId()
   const router = useRouter()
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  
+  const currentCampaign = campaigns[currentCampaignIndex] || {}
+  const videoAspectRatio =
+    currentCampaign.width && currentCampaign.height
+      ? currentCampaign.width / currentCampaign.height
+      : 16 / 9 // Relación predeterminada
 
   useEffect(() => {
     const checkRegistration = async () => {
@@ -81,8 +85,14 @@ export default function Index() {
         const campaignsSnapshot = await getDocs(campaignsQuery)
 
         const campaignsList = campaignsSnapshot.docs.map((doc) => {
-          const { descriptionTitle, description, link, linkText, mediaUrl } =
-            doc.data()
+          const {
+            descriptionTitle,
+            description,
+            link,
+            linkText,
+            mediaUrl,
+            media,
+          } = doc.data()
           return {
             id: doc.id,
             descriptionTitle: descriptionTitle || '',
@@ -90,6 +100,8 @@ export default function Index() {
             link: link || '',
             linkText: linkText || '',
             mediaUrl: mediaUrl || '',
+            width: media.Width || 1920, // Valor predeterminado en caso de no estar disponible
+            height: media.Height || 1080,
           }
         })
 
@@ -261,9 +273,9 @@ export default function Index() {
   };*/
 
   const handleVideoPress = () => {
-    incrementGlobalMetrics(campaigns[currentCampaignIndex].id, 'click')
     const currentVideo = campaigns[currentCampaignIndex]
     if (currentVideo && currentVideo.link) {
+      incrementGlobalMetrics(campaigns[currentCampaignIndex].id, 'click')
       Linking.openURL(currentVideo.link).catch((err) =>
         console.error('Error al abrir la URL:', err)
       )
@@ -272,13 +284,17 @@ export default function Index() {
     }
   }
 
+  
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle='dark-content' hidden={true} />
       <View style={styles.container}>
         {isRegistered ? (
           <>
-            <View style={styles.videoContainer}>
+            <View
+              style={styles.videoContainer}
+            >
               <VideoView
                 style={styles.video}
                 player={player}
