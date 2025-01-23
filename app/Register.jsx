@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as Application from 'expo-application';
 import { collection, doc, setDoc } from 'firebase/firestore';
-import { Link, useRouter } from 'expo-router';
+import { Link, useRouter, useNavigation } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import * as Cellular from 'expo-cellular';
+import Checkbox from 'expo-checkbox';
 
 
 
@@ -28,6 +29,14 @@ const Register = () => {
   const [gender, setGender] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isTermsAccepted, setIsTermsAccepted] = useState(false);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
+
   const router = useRouter();
 
 
@@ -42,6 +51,11 @@ const Register = () => {
   const handleRegister = async () => {
     if (!firstName || !lastName || !email || !phone || !dateOfBirth || !gender) {
       Alert.alert('Error', 'Por favor, completa todos los campos.');
+      return;
+    }
+
+    if (!isTermsAccepted) {
+      Alert.alert('Error', 'Debes aceptar los términos y condiciones.');
       return;
     }
 
@@ -124,9 +138,28 @@ const Register = () => {
       {showDatePicker && (
         <DateTimePicker value={new Date()} mode="date" display="default" onChange={handleDateChange} />
       )}
+
+       {/* Checkbox para términos y condiciones */}
+      <View style={styles.termsContainer}>
+        <Checkbox
+          value={isTermsAccepted}
+          onValueChange={setIsTermsAccepted}
+          color={isTermsAccepted ? '#4A90E2' : undefined}
+          style={styles.checkbox}
+        />
+        <Text style={styles.termsText}>
+          Acepto los <Text style={styles.linkText}>términos y condiciones</Text>
+        </Text>
+      </View>
+
       <Button title="Registrarse" onPress={handleRegister} />
     </View>
   );
+};
+
+// Configura las opciones de la pantalla
+Register.options = {
+  headerShown: false, // Oculta la navbar
 };
 
 const styles = StyleSheet.create({
@@ -165,6 +198,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderRadius: 5,
     marginBottom: 15,
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    backgroundColor: '#fff',
+  },
+  termsText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  linkText: {
+    color: '#4A90E2',
+    textDecorationLine: 'underline',
   },
 });
 

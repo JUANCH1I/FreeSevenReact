@@ -30,7 +30,7 @@ import {
 import { useVideoPlayer, VideoView } from 'expo-video'
 import { Link, useRouter } from 'expo-router'
 import { useEvent, useEventListener } from 'expo'
-import { Ionicons } from '@expo/vector-icons'
+import { AntDesign, Ionicons } from '@expo/vector-icons'
 import { incrementViews } from './services/firebaseConfig'
 import { formatTime } from './utils/utils'
 
@@ -50,11 +50,7 @@ export default function Index() {
   const androidId = Application.getAndroidId()
   const router = useRouter()
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const currentCampaign = campaigns[currentCampaignIndex] || {}
-  const videoAspectRatio =
-    currentCampaign.width && currentCampaign.height
-      ? currentCampaign.width / currentCampaign.height
-      : 16 / 9 // Relación predeterminada
+
 
   useEffect(() => {
     const checkRegistration = async () => {
@@ -321,7 +317,7 @@ export default function Index() {
                 onPress={() =>
                   router.push({
                     pathname: './goals',
-                    params: { totalTimeWatched: totalTimeWatched },
+                    params: { androidId: androidId },
                   })
                 }
               >
