@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Modal,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { db } from './services/firebaseConfig'; // Configura Firebase aquí
@@ -18,6 +19,7 @@ import { Link, useRouter, useNavigation } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import * as Cellular from 'expo-cellular';
 import Checkbox from 'expo-checkbox';
+import TermsAndConditions from './components/TermsAndConditions';
 
 
 
@@ -30,6 +32,7 @@ const Register = () => {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isTermsAccepted, setIsTermsAccepted] = useState(false);
+  const [showTerms, setShowTerms] = useState(false)
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -127,8 +130,8 @@ const Register = () => {
         style={styles.picker}
       >
         <Picker.Item label="Seleccione un género" value="" />
-        <Picker.Item label="Masculino" value="Masculino" />
-        <Picker.Item label="Femenino" value="Femenino" />
+        <Picker.Item label="Masculino" value="male" />
+        <Picker.Item label="Femenino" value="female" />
         <Picker.Item label="Otro" value="Otro" />
       </Picker>
 
@@ -139,20 +142,32 @@ const Register = () => {
         <DateTimePicker value={new Date()} mode="date" display="default" onChange={handleDateChange} />
       )}
 
-       {/* Checkbox para términos y condiciones */}
+        {/* Checkbox para términos y condiciones */}
       <View style={styles.termsContainer}>
         <Checkbox
+          accessibilityLabel="Aceptar términos y condiciones"
           value={isTermsAccepted}
           onValueChange={setIsTermsAccepted}
-          color={isTermsAccepted ? '#4A90E2' : undefined}
+          color={isTermsAccepted ? "#4A90E2" : undefined}
           style={styles.checkbox}
         />
         <Text style={styles.termsText}>
-          Acepto los <Text style={styles.linkText}>términos y condiciones</Text>
+          Acepto los{" "}
+          <Text style={styles.linkText} onPress={() => setShowTerms(true)}>
+            términos y condiciones
+          </Text>
         </Text>
       </View>
 
       <Button title="Registrarse" onPress={handleRegister} />
+      <Modal visible={showTerms} animationType="slide">
+        <View style={styles.modalContainer}>
+          <TermsAndConditions />
+          <TouchableOpacity style={styles.closeButton} onPress={() => setShowTerms(false)}>
+            <Text style={styles.closeButtonText}>Cerrar</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -200,28 +215,45 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   termsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderWidth: 2,
-    borderColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#4A90E2",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 10,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   termsText: {
     fontSize: 14,
-    color: '#333',
+    color: "#333",
   },
   linkText: {
-    color: '#4A90E2',
-    textDecorationLine: 'underline',
+    color: "#4A90E2",
+    textDecorationLine: "underline",
   },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  closeButton: {
+    backgroundColor: "#4A90E2",
+    padding: 10,
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 5,
+  },
+  closeButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  }, 
 });
 
 export default Register;

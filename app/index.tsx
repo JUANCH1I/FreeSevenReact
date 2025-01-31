@@ -31,7 +31,6 @@ import { useVideoPlayer, VideoView } from 'expo-video'
 import { Link, useRouter } from 'expo-router'
 import { useEvent, useEventListener } from 'expo'
 import { AntDesign, Ionicons } from '@expo/vector-icons'
-import { incrementViews } from './services/firebaseConfig'
 import { formatTime } from './utils/utils'
 
 export default function Index() {
@@ -50,7 +49,6 @@ export default function Index() {
   const androidId = Application.getAndroidId()
   const router = useRouter()
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-
 
   useEffect(() => {
     const checkRegistration = async () => {
@@ -122,8 +120,7 @@ export default function Index() {
   const handleVideoEnd = async () => {
     await syncTimeToFirebase()
     console.log(campaigns.length)
-    if ((campaigns.length = 1)) {
-      // Si solo hay una campaña, reinicia el video
+    if (campaigns.length === 1) {
       console.log('Reproducción en bucle activada.')
       setVideoUrl(campaigns[0]?.mediaUrl || '') // Reinicia el mismo video
       player.play() // Asegúrate de iniciar la reproducción
@@ -132,6 +129,9 @@ export default function Index() {
       setCurrentCampaignIndex(nextIndex)
       setVideoUrl(campaigns[nextIndex]?.mediaUrl || '')
     }
+
+    // Restablecer hasCountedView para el nuevo video
+    hasCountedView.current = false
   }
 
   const handlePiPStart = () => {
@@ -212,6 +212,7 @@ export default function Index() {
   const player = useVideoPlayer(videoUrl, (player) => {
     player.audioMixingMode = 'mixWithOthers'
     player.loop = false
+    player.timeUpdateEventInterval = 1; // Intervalo de 1 segundo
     player.play()
   })
 
@@ -233,23 +234,51 @@ export default function Index() {
 
   const hasCountedView = useRef(false)
 
-  useEffect(() => {
-    const subscription = player.addListener('timeUpdate', () => {
-      const currentTime = player.currentTime
-      const duration = player.duration
+// Modificación en el `useEffect` para el evento `timeUpdate`
+useEffect(() => {
+  const subscription = player.addListener('timeUpdate', async () => {
+    const currentTime = player.currentTime;
+    const duration = player.duration;
 
-      // Verifica si el usuario ha visto al menos el 50% del video
-      if (!hasCountedView.current && currentTime / duration >= 0.5) {
-        incrementViews(campaigns[currentCampaignIndex].id)
+    // Verifica si el video ha alcanzado el 50% de su duración
+    if (
+      !hasCountedView.current &&
+      currentTime &&
+      duration &&
+      currentTime / duration >= 0.5
+    ) {
+      const currentCampaignId = campaigns[currentCampaignIndex]?.id;
 
-        hasCountedView.current = true
+      // Verifica si esta campaña ya fue contada
+      const viewedCampaigns = JSON.parse(
+        (await AsyncStorage.getItem('viewedCampaigns')) || '[]'
+      );
+
+      if (!viewedCampaigns.includes(currentCampaignId)) {
+        // Incrementa las vistas para la campaña actual
+        incrementGlobalMetrics(currentCampaignId, 'view');
+        console.log('Increment views');
+
+        // Marca que esta campaña ya fue contada
+        viewedCampaigns.push(currentCampaignId);
+        await AsyncStorage.setItem(
+          'viewedCampaigns',
+          JSON.stringify(viewedCampaigns)
+        );
+
+        // Marca que la vista ha sido contada localmente
+        hasCountedView.current = true;
+      } else {
+        console.log('Esta campaña ya fue contada previamente.');
       }
-    })
-
-    return () => {
-      subscription.remove()
     }
-  }, [player])
+  });
+  return () => {
+    subscription.remove();
+  };
+}, [player, campaigns, currentCampaignIndex]);
+
+
 
   useEventListener(player, 'statusChange', ({ status }) => {
     if (status === 'idle') {
@@ -280,17 +309,13 @@ export default function Index() {
     }
   }
 
-  
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle='dark-content' hidden={true} />
       <View style={styles.container}>
         {isRegistered ? (
           <>
-            <View
-              style={styles.videoContainer}
-            >
+            <View style={styles.videoContainer}>
               <VideoView
                 style={styles.video}
                 player={player}
