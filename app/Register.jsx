@@ -75,7 +75,7 @@ const Register = () => {
       createdAt: Date.now(),
       androidVersion: Device.osVersion,
       deviceBrand: Device.brand,
-      operator: Cellular.getCarrierNameAsync(),
+      operator: Cellular.getCarrierNameAsync() ,
       manufacturer: Device.manufacturer,
       model: Device.modelName,
     };
