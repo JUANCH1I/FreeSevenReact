@@ -126,12 +126,19 @@ const incrementGlobalMetrics = async (campaignId, type) => {
 }
 
 const updateWatchTime = async (campaignId, userId, timeWatched) => {
+  console.log('updateWatchTime')
   const userCampaignRef = doc(db, `campaigns/${campaignId}/users`, userId) // Usuario en campaña
   const campaignRef = doc(db, 'campaigns', campaignId) // Métricas globales de campaña
   const userGlobalRef = doc(db, 'users', userId) // Métricas globales de usuario
+  console.log('userCampaignRef', userCampaignRef)
+  console.log('campaignRef', campaignRef)
+  console.log('userGlobalRef', userGlobalRef)
+  console.log('timeWatched', timeWatched)
+  console.log('userId', userId)
 
   try {
-    await runTransaction(db, async (transaction) => {
+    runTransaction(db, async (transaction) => {
+      console.log('ejectuando runTransaction')
       // Leer todos los documentos necesarios primero
       const userCampaignSnapshot = await transaction.get(userCampaignRef)
       const campaignSnapshot = await transaction.get(campaignRef)

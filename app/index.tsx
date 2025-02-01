@@ -142,7 +142,9 @@ export default function Index() {
 
 
   const handleVideoEnd = async () => {
+    console.log('Video terminado');
     await syncTimeToFirebase();
+
   
     if (campaigns.length > 0) {
       const nextIndex = (currentCampaignIndex + 1) % campaigns.length;
@@ -163,7 +165,7 @@ export default function Index() {
 
   const startTimer = async () => {
       intervalRef.current = setInterval(() => {
-        setTimeCounter((prev) => prev + 1) // Contador visible
+        setTimeCounter((prev) => prev + 1); // Contador visible
         setTotalTimeWatched((prev) => prev + 1) // Tiempo total acumulado
         setVideoWatchTimes((prev) => ({
           ...prev,
@@ -174,17 +176,20 @@ export default function Index() {
     
   }
 
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+  const stopTimer = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      console.log('Temporizador detenido');
     }
-  }, [])
+  };
+
+  useEffect(() => {
+    console.log('timer', timeCounter);
+  }, [timeCounter]);
+
 
   const syncTimeToFirebase = async () => {
-    if (!androidId || timeCounter === 0) return
 
     const currentCampaignId = campaigns[currentCampaignIndex]?.id || ''
     if (!currentCampaignId) {
@@ -205,22 +210,7 @@ export default function Index() {
     }
   }
 
-  useEffect(() => {
-    const appStateListener = AppState.addEventListener(
-      'change',
-      (nextAppState) => {
-        if (
-          appState.current.match(/inactive|background/) &&
-          nextAppState === 'active'
-        ) {
-          syncTimeToFirebase()
-        }
-        appState.current = nextAppState
-      }
-    )
-
-    return () => appStateListener.remove()
-  }, [timeCounter])
+  
 
   
 
@@ -282,10 +272,8 @@ export default function Index() {
 
   useEventListener(player, 'statusChange', ({ status }) => {
     if (status === 'idle') {
-      console.log('Video terminó, cargando siguiente...');
       handleVideoEnd();
     } else if (status === 'readyToPlay' && !player.playing) {
-      console.log('Forzando reproducción...');
       player.play();
     }
   });
@@ -325,10 +313,7 @@ export default function Index() {
               />
             </View>
             <View style={styles.infoContainer}>
-              <Text style={styles.timeCounter}>
-                <Ionicons name='time-outline' size={24} color='#4A90E2' />{' '}
-                {timeCounter}s
-              </Text>
+              
               <TouchableOpacity
                 style={styles.goalsButton}
                 onPress={() =>
@@ -345,7 +330,7 @@ export default function Index() {
             <Text style={styles.totalTimeWatched}>
               <Text style={styles.totalTimeWatchedText}>Tiempo total</Text>
               <Ionicons name='time-outline' size={24} color='#4A90E2' />{' '}
-              {formatTime(totalTimeWatched)}s
+              {formatTime(totalTimeWatched)}
             </Text>
           </>
         ) : (
